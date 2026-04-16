@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #ffffff;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .header h1 {
+      margin: 0;
+      color: #333333;
+    }
+    .content {
+      color: #555555;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 20px;
+      margin: 20px 0;
+      background-color: #4CAF50;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #999999;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <div class="header">
+      <h1>Welcome to PAWSOME 🎉</h1>
+    </div>
+
+    <div class="content">
+      <p>Hi {{UserName}},</p>
+
+      <p>
+        We're excited to have you on board! Thanks for joining <strong>{{YourAppName}}</strong>.
+      </p>
+
+      <p>
+        You can now explore all the features and start getting the most out of our platform.
+      </p>
+
+      <a href="{{ActionLink}}" class="button">Get Started</a>
+
+      <p>
+        If you have any questions, feel free to reply to this email—we're always here to help.
+      </p>
+
+      <p>
+        Cheers,<br>
+        The {{YourAppName}} Team
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>© {{Year}} {{YourAppName}}. All rights reserved.</p>
+    </div>
+
+  </div>
+</body>
+</html>

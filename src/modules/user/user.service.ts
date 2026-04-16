@@ -9,7 +9,7 @@ export class UserService {
     constructor(private readonly prismaService:PrismaService){}
     
     async addUser(createUserDto:CreateUserDto){
-        console.log(createUserDto)
+     
         const data = await this.prismaService.user.create({
             data:{...createUserDto, role:UserRole.USER}
         })
