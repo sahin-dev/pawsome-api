@@ -1,0 +1,40 @@
+model User {
+    id   Int  @id @default(autoincrement())
+    name String
+    email   String @unique
+    phone String  @unique
+    password    String 
+    role  UserRole
+    last_assigned  DateTime?
+    is_blocked    Boolean @default(false)
+    emergency_contact  String?
+    addresses Address[]
+    pets   Pet[]
+    is_terms_accepted  Boolean  @default(false)
+    terms_accepted_at  DateTime?
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+
+    @@map("users")
+
+}
+
+
+model Address {
+    id Int  @id  @default(autoincrement())
+    title String
+    text     String
+    userId  Int
+    user User  @relation(fields:[userId], references:[id])
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@map("addresses")
+}
+
+
+enum UserRole {
+    USER
+    SITTER
+    ADMIN
+}

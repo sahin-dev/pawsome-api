@@ -1,0 +1,43 @@
+model Service {
+
+    id  Int  @id @default(autoincrement())
+    title  String
+    status  ServiceStatus @default(ACTIVE)
+
+    packages  Package[]
+
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
+
+@@map("services")
+
+}
+
+model  Package {
+    id  Int  @id  @default(autoincrement())
+    duration  Int
+    duration_unit DurationUnit  @default(min)
+    price  Float
+    serviceId  Int
+
+    service  Service  @relation(fields:[serviceId], references:[id])
+
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
+
+    @@map("packages")
+
+}
+
+enum  ServiceStatus  {
+    ACTIVE
+    INACTIVE
+}
+
+enum DurationUnit {
+    min
+    hour
+    day
+    week
+    month
+}

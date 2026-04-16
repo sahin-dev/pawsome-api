@@ -1,0 +1,20 @@
+
+model Pet {
+    id  Int @id @default(autoincrement())
+    name String
+    type  String
+    breed String
+    age Float
+    size Float
+    medical_notes  String
+    feeding_schedule  String
+    behaviour_notes  String
+    special_instructions  String
+    images   String[]
+    ownerId  Int
+    owner  User  @relation(fields:[ownerId], references:[id])
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@map("pets")
+}

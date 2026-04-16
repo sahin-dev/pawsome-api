@@ -1,0 +1,29 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pawsome_database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pawsome
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: pawsome_backend
+    depends_on:
+      - postgres
+    ports:
+      - 3000:3000
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres:5432
+
+
+volumes:
+  db_data:
