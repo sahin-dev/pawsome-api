@@ -4,15 +4,12 @@ export class CreateUserDto {
 
     @IsString()
     @IsNotEmpty()
-    name:string
+    fullName:string
 
     @IsEmail()
     @IsNotEmpty()
     email:string
 
-    @IsString()
-    @IsNotEmpty()
-    phone:string
 
     @IsString()
     @IsNotEmpty()
