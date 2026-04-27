@@ -2,30 +2,17 @@ model Service {
 
     id  Int  @id @default(autoincrement())
     title  String
+    icon  String
+    description String
+    price Float
+    duration  Float
+    durationUnit DurationUnit
     status  ServiceStatus @default(ACTIVE)
-
-    packages  Package[]
-
+    bookings Booking[]
     createdAt  DateTime  @default(now())
     updatedAt  DateTime  @updatedAt
 
 @@map("services")
-
-}
-
-model  Package {
-    id  Int  @id  @default(autoincrement())
-    duration  Int
-    duration_unit DurationUnit  @default(min)
-    price  Float
-    serviceId  Int
-
-    service  Service  @relation(fields:[serviceId], references:[id])
-
-    createdAt  DateTime  @default(now())
-    updatedAt  DateTime  @updatedAt
-
-    @@map("packages")
 
 }
 

@@ -2,19 +2,27 @@
 model Pet {
     id  Int @id @default(autoincrement())
     name String
-    type  String
+    type  PetType
     breed String
     age Float
     size Float
-    medical_notes  String
-    feeding_schedule  String
-    behaviour_notes  String
-    special_instructions  String
+    medical_notes  String?
+    feeding_instructions  String?
+    behaviour_notes  String?
+    special_instructions  String?
     images   String[]
     ownerId  Int
     owner  User  @relation(fields:[ownerId], references:[id])
+    bookings  Booking[]
+    gallery  Gallery[] 
     createdAt  DateTime  @default(now())
     updatedAt  DateTime @updatedAt
 
     @@map("pets")
+}
+
+enum PetType {
+    Dog 
+    Cat
+    Bird
 }
