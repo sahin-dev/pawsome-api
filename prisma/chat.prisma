@@ -1,0 +1,79 @@
+model ChatRoom {
+  id Int @id @default(autoincrement()) 
+  is_deleted Boolean @default(false)
+  isGroupChat Boolean @default(false)
+  name String?
+  image String?
+  
+  chats Chat[]
+  participants Participant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id])
+  @@map("chat_rooms")
+}
+
+model Participant{
+  id Int @id @default(autoincrement())
+  chatRoom_id Int
+  user_id Int
+  role RoomParticipantRole @default(MEMBER)
+
+  chatRoom ChatRoom @relation(fields: [chatRoom_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("participants")
+}
+
+
+model BlockList {
+  id Int @id @default(autoincrement())
+
+  blocker_id      Int
+  blocked_user_id Int
+
+  blocker         User @relation("blocker", fields: [blocker_id], references: [id])
+  blocked_user User @relation("blocked_by", fields: [blocked_user_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([blocker_id, blocked_user_id])
+  @@map("block_list")
+}
+
+
+
+model Chat {
+  id           Int      @id @default(autoincrement())
+  chatRoom_id  Int
+  sender_id    Int        
+  message      String
+  type         MessageType @default(TEXT)
+
+  is_read      Boolean     @default(false)
+  is_delivered Boolean     @default(false)
+
+  chatRoom ChatRoom @relation(fields: [chatRoom_id], references: [id])
+  sender   User     @relation(fields: [sender_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("chats")
+}
+
+enum RoomParticipantRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+}

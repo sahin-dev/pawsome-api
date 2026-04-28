@@ -5,7 +5,7 @@ import { UpdatePetDto } from "./dtos/update-pet.dto";
 import { UploadGalleryDto } from "./dtos/upload-gallery.dto";
 import { UpdateGalleryDto } from "./dtos/update-gallery.dto";
 import { Pet, Gallery } from "generated/prisma/browser";
-import { PaginatedResponse } from "src/common/dtos/paginated-response.dto";
+import { PaginatedResponseDto } from "src/common/dtos/paginated-response.dto";
 import { buildPaginationMeta } from "src/common/utils/paginate.util";
 
 @Injectable()
@@ -42,7 +42,7 @@ export class PetService {
         return pet;
     }
 
-    async getAllPets(ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Pet>> {
+    async getAllPets(ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Pet>> {
         const skip = (page - 1) * limit;
         const where = { ownerId };
 
@@ -196,7 +196,7 @@ export class PetService {
         }
     }
 
-    async getGallery(petId: number, ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Gallery>> {
+    async getGallery(petId: number, ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Gallery>> {
         try {
             // Verify user owns the pet
             const pet = await this.getPetById(petId, ownerId);

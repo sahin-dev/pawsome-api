@@ -7,7 +7,12 @@ export interface PaginationMeta {
   hasPreviousPage: boolean;
 }
 
-export interface PaginatedResponse<T> {
+export class PaginatedResponseDto<T> {
   data: T[];
   pagination: PaginationMeta;
+
+  constructor(data: T[], pagination: PaginationMeta) {
+    this.data = data;
+    this.pagination = pagination;
+  }
 }

@@ -4,6 +4,9 @@ import { UserRole } from "generated/prisma/enums"
 export class RegisterResponseDto {
     
     @Expose()
+    id: number
+
+    @Expose()
     fullName:string
 
     @Expose()

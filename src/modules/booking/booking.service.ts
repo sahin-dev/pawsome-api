@@ -10,7 +10,7 @@ import { AssignSitterDto } from './dtos/assign-sitter.dto';
 import { UploadToBookingDto } from './dtos/upload-to-booking.dto';
 import { Booking, BookingUploads } from 'generated/prisma/browser';
 import { BookingStatus } from 'generated/prisma/enums';
-import { PaginatedResponse } from 'src/common/dtos/paginated-response.dto';
+import { PaginatedResponseDto } from 'src/common/dtos/paginated-response.dto';
 import { buildPaginationMeta } from 'src/common/utils/paginate.util';
 
 @Injectable()
@@ -80,7 +80,7 @@ export class BookingService {
     }
   }
 
-  async getBookingsByUser(userId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Booking>> {
+  async getBookingsByUser(userId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Booking>> {
     try {
       const skip = (page - 1) * limit;
       const where = {
@@ -362,7 +362,7 @@ export class BookingService {
     }
   }
 
-  async getUploadsForBooking(bookingId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponse<BookingUploads>> {
+  async getUploadsForBooking(bookingId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<BookingUploads>> {
     try {
       // Verify booking exists
       await this.getBookingById(bookingId);
@@ -392,7 +392,7 @@ export class BookingService {
     }
   }
 
-  async getBookingsBySitter(sitterId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Booking>> {
+  async getBookingsBySitter(sitterId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Booking>> {
     try {
       const skip = (page - 1) * limit;
       const where = { sitterId };

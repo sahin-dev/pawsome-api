@@ -1,19 +1,196 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateUserDto } from "./dtos/create-user.dto";
+import { ChangePasswordDto } from "./dtos/change-password.dto";
+import { UpdateProfileDto } from "./dtos/update-profile.dto";
+import { PaginationQueryDto } from "src/common/dtos/pagination-query.dto";
+import { PaginatedResponseDto } from "src/common/dtos/paginated-response.dto";
+import { buildPaginationMeta } from "src/common/utils/paginate.util";
 import { UserRole } from "generated/prisma/enums";
+import bcrypt from 'bcrypt';
 
 @Injectable()
 export class UserService {
 
-    constructor(private readonly prismaService:PrismaService){}
-    
-    async addUser(createUserDto:CreateUserDto){
-     
-        const data = await this.prismaService.user.create({
-            data:{...createUserDto, role:UserRole.USER}
-        })
+    constructor(private readonly prismaService: PrismaService) { }
 
-        return data
+    async addUser(createUserDto: CreateUserDto) {
+        try {
+            // Check if email already exists
+            const existingUser = await this.prismaService.user.findUnique({
+                where: { email: createUserDto.email }
+            });
+
+            if (existingUser) {
+                throw new BadRequestException('Email already registered');
+            }
+
+            const data = await this.prismaService.user.create({
+                data: { ...createUserDto, role: UserRole.USER }
+            });
+
+            return data;
+        } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to create user');
+        }
+    }
+
+    async getUserById(userId: number) {
+        try {
+            const user = await this.prismaService.user.findUnique({
+                where: { id: userId }
+            });
+
+            if (!user) {
+                throw new NotFoundException('User not found');
+            }
+
+            return user;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to retrieve user');
+        }
+    }
+
+    async changePassword(userId: number, changePasswordDto: ChangePasswordDto) {
+        try {
+            const user = await this.getUserById(userId);
+
+            // Verify current password
+            const isPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
+
+            if (!isPasswordValid) {
+                throw new BadRequestException('Current password is incorrect');
+            }
+
+            // Hash new password
+            const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
+
+            const updatedUser = await this.prismaService.user.update({
+                where: { id: userId },
+                data: { password: hashedPassword }
+            });
+
+            return {
+                message: 'Password changed successfully',
+                id: updatedUser.id,
+                email: updatedUser.email
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to change password');
+        }
+    }
+
+    async updateProfile(userId: number, updateProfileDto: UpdateProfileDto) {
+        try {
+            const user = await this.getUserById(userId);
+
+            const updatedUser = await this.prismaService.user.update({
+                where: { id: userId },
+                data: updateProfileDto
+            });
+
+            return updatedUser;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to update profile');
+        }
+    }
+
+    async getAllUsers(paginationQueryDto: PaginationQueryDto): Promise<PaginatedResponseDto<any>> {
+        try {
+            const skip = paginationQueryDto.getSkip();
+
+            const [users, total] = await Promise.all([
+                this.prismaService.user.findMany({
+                    where: {
+                        role: UserRole.USER
+                    },
+                    skip,
+                    take: paginationQueryDto.limit,
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        role: true,
+                        is_email_verified: true,
+                        is_blocked: true,
+                        createdAt: true,
+                        updatedAt: true
+                    }
+                }),
+                this.prismaService.user.count({
+                    where: { role: UserRole.USER }
+                })
+            ]);
+
+            const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
+            return new PaginatedResponseDto(users, pagination);
+        } catch (error) {
+            throw new BadRequestException('Failed to retrieve users');
+        }
+    }
+
+    async getAllSitters(paginationQueryDto: PaginationQueryDto): Promise<PaginatedResponseDto<any>> {
+        try {
+            const skip = paginationQueryDto.getSkip();
+
+            const [sitters, total] = await Promise.all([
+                this.prismaService.user.findMany({
+                    where: {
+                        role: UserRole.SITTER
+                    },
+                    skip,
+                    take: paginationQueryDto.limit,
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        role: true,
+                        is_email_verified: true,
+                        is_blocked: true,
+                        emergency_contact: true,
+                        location_lat: true,
+                        location_lng: true,
+                        createdAt: true,
+                        updatedAt: true
+                    }
+                }),
+                this.prismaService.user.count({
+                    where: { role: UserRole.SITTER }
+                })
+            ]);
+
+            const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
+            return new PaginatedResponseDto(sitters, pagination);
+        } catch (error) {
+            throw new BadRequestException('Failed to retrieve sitters');
+        }
+    }
+
+    async getProfile(userId: number) {
+        try {
+            const user = await this.getUserById(userId);
+
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+            throw new BadRequestException('Failed to retrieve profile');
+        }
     }
 }

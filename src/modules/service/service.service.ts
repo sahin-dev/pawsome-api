@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceDto } from './dtos/create-service.dto';
 import { UpdateServiceDto } from './dtos/update-service.dto';
 import { Service } from 'generated/prisma/browser';
-import { PaginatedResponse } from 'src/common/dtos/paginated-response.dto';
+import { PaginatedResponseDto } from 'src/common/dtos/paginated-response.dto';
 import { buildPaginationMeta } from 'src/common/utils/paginate.util';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class ServiceService {
     }
   }
 
-  async getAllServices(page: number = 1, limit: number = 10): Promise<PaginatedResponse<Service>> {
+  async getAllServices(page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Service>> {
     try {
       const skip = (page - 1) * limit;
 
@@ -34,10 +34,8 @@ export class ServiceService {
         this.prismaService.service.count(),
       ]);
 
-      return {
-        data,
-        pagination: buildPaginationMeta(totalItems, page, limit),
-      };
+      const pagination = buildPaginationMeta(totalItems, page, limit);
+      return new PaginatedResponseDto(data, pagination);
     } catch (error) {
       throw new BadRequestException('Failed to retrieve services.');
     }
@@ -62,7 +60,7 @@ export class ServiceService {
     }
   }
 
-  async getActiveServices(page: number = 1, limit: number = 10): Promise<PaginatedResponse<Service>> {
+  async getActiveServices(page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Service>> {
     try {
       const skip = (page - 1) * limit;
       const where = { status: 'ACTIVE' as const };
@@ -77,10 +75,8 @@ export class ServiceService {
         this.prismaService.service.count({ where }),
       ]);
 
-      return {
-        data,
-        pagination: buildPaginationMeta(totalItems, page, limit),
-      };
+      const pagination = buildPaginationMeta(totalItems, page, limit);
+      return new PaginatedResponseDto(data, pagination);
     } catch (error) {
       throw new BadRequestException('Failed to retrieve active services.');
     }

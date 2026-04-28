@@ -22,7 +22,7 @@ import { UserRole } from 'generated/prisma/enums';
 @Controller('services')
 @UseGuards(RolesGuard)
 export class ServiceController {
-  constructor(private readonly serviceService: ServiceService) {}
+  constructor(private readonly serviceService: ServiceService) { }
 
   @Post()
   @Roles(UserRole.ADMIN)
