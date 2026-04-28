@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from './file-upload.service';
+import type{Multer} from 'multer'
 
 @Controller('file-upload')
 export class FileUploadController {
