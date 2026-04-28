@@ -36,6 +36,7 @@ export class ChatService {
         if(sendMessageDto.receiver_id){
              room = await this.createChatRoomIfNotExists(userId, sendMessageDto.receiver_id);
         }
+
         if(sendMessageDto.room_id){
              room = await this.prismaService.chatRoom.findUnique({
                 where:{id:sendMessageDto.room_id}
@@ -50,25 +51,10 @@ export class ChatService {
             data: {
                 chatRoom_id: room.id,
                 sender_id: userId,
-                receiver_id: sendMessageDto.receiver_id,
+                receiver_id: sendMessageDto.receiver_id!,
                 message: sendMessageDto.message,
             },
-            include: {
-                sender: {
-                    select: {
-                        id: true,
-                        nick_name: true,
-                        avatar: true
-                    }
-                },
-                receiver: {
-                    select: {
-                        id: true,
-                        nick_name: true,
-                        avatar: true
-                    }
-                }
-            },
+            
         });
 
         await this.prismaService.chatRoom.update({
@@ -80,6 +66,8 @@ export class ChatService {
 
         return createdChat
     }
+
+
 
     private async isBlockExists(userId: number, receiverId: number) {
         const isBlockExist = await this.prismaService.blockList.findFirst({
@@ -155,22 +143,8 @@ export class ChatService {
                     participants:{some:{user_id:userId}}
                 },
                 include: {
-                    user1: {
-                        select: {
-                            id: true,
-                            nick_name: true,
-                            licence_id: true,
-                            avatar: true,
-                        },
-                    
-                    },
-                    user2: {
-                        select: {
-                            id: true,
-                            nick_name: true,
-                            licence_id: true,
-                            avatar: true,
-                        }
+                    participants: {
+                        
                     },
                     chats: {
                         orderBy: { createdAt: "desc" },
@@ -179,7 +153,6 @@ export class ChatService {
                             sender: {
                                 select: {
                                     id: true,
-                                    nick_name: true
                                 }
                             }
                         }
@@ -208,13 +181,17 @@ export class ChatService {
             })
         ]);
 
-        const mappedRoom = rooms.map(async ({ user1, user2, _count, chats, ...room }) => {
+        const mappedRoom = rooms.map(async ({ participants, _count, chats, ...room }) => {
             // Get the other user (not the current user)
-            const otherUser = room.user1_id === userId ? user2 : user1;
+            const otherUserParticipant = participants.find(p => p.user_id !== userId);
+            const otherUser = otherUserParticipant;
+            if (!otherUser) {
+                throw new Error('Other user not found in room');
+            }
             const latestChat = chats[0];
             const is_latest_message_mine = latestChat?.sender_id === userId;
-            const isBlockedByMe = await this.prismaService.blockList.findFirst({where:{user_id:userId, blocked_user_id:otherUser.id}})
-            const isBlockedMe = await this.prismaService.blockList.findFirst({where:{user_id:otherUser.id, blocked_user_id:userId}})
+            const isBlockedByMe = await this.prismaService.blockList.findFirst({where:{blocker_id:userId, blocked_user_id:otherUser.id}})
+            const isBlockedMe = await this.prismaService.blockList.findFirst({where:{blocker_id:otherUser.id, blocked_user_id:userId}})
             
             
             return {
@@ -239,29 +216,14 @@ export class ChatService {
      * @param getAllMessageDto 
      * @returns 
      */
-    async getRoomMessages(userId: string, getAllMessageDto: GetAllMessagesDto) {
+    async getRoomMessages(userId: number, getAllMessageDto: GetAllMessagesDto) {
         const skip = (getAllMessageDto.page - 1) * getAllMessageDto.limit;
 
 
         const [messages, total] = await Promise.all([
             this.prismaService.chat.findMany({
                 where: { chatRoom_id: getAllMessageDto.roomId },
-                include: {
-                    sender: {
-                        select: {
-                            id: true,
-                            nick_name: true,
-                            avatar: true
-                        }
-                    },
-                    receiver: {
-                        select: {
-                            id: true,
-                            nick_name: true,
-                            avatar: true
-                        }
-                    }
-                },
+               
                 skip,
                 take: getAllMessageDto.limit,
                 orderBy: { createdAt: "desc" }

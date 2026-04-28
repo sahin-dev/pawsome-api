@@ -9,7 +9,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from './file-upload.service';
 
-@Controller('file-upload')
+@Controller('uploads')
 export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 

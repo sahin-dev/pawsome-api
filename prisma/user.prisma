@@ -14,7 +14,8 @@ model User {
     roomsparticipants Participant[]
     blockList BlockList[] @relation("blocker")
     blockedBy BlockList[] @relation("blocked_by")
-    messages_sent Chat[]
+    messages_sent Chat[] @relation("sender")
+    messages_received Chat[] @relation("recipient")
     location_lat Float?
     location_lng Float?
     is_terms_accepted  Boolean  @default(false)

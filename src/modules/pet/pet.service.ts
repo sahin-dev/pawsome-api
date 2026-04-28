@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { CacheService, CACHE_KEYS } from "src/common/services/cache.service";
 import { AddPetDto } from "./dtos/addPet.dto";
 import { UpdatePetDto } from "./dtos/update-pet.dto";
 import { UploadGalleryDto } from "./dtos/upload-gallery.dto";
@@ -11,7 +12,10 @@ import { buildPaginationMeta } from "src/common/utils/paginate.util";
 @Injectable()
 export class PetService {
 
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly cacheService: CacheService
+    ) { }
 
     async addPet(ownerId: number, addPetDto: AddPetDto): Promise<Pet> {
         try {
@@ -21,6 +25,10 @@ export class PetService {
                     owner: { connect: { id: ownerId } }
                 }
             });
+
+            // Invalidate owner's pet list caches
+            await this.cacheService.invalidatePet(undefined, ownerId);
+
             return createdPet;
         } catch (error) {
             throw new BadRequestException('Failed to create pet. Please check your input.');
@@ -28,43 +36,51 @@ export class PetService {
     }
 
     async getPetById(petId: number, ownerId: number): Promise<Pet> {
-        const pet = await this.prismaService.pet.findFirst({
-            where: {
-                id: petId,
-                ownerId: ownerId
+        const cacheKey = `${CACHE_KEYS.PET.BY_ID(petId)}:owner:${ownerId}`;
+
+        return await this.cacheService.getOrSet(cacheKey, async () => {
+            const pet = await this.prismaService.pet.findFirst({
+                where: {
+                    id: petId,
+                    ownerId: ownerId
+                }
+            });
+
+            if (!pet) {
+                throw new NotFoundException(`Pet with ID ${petId} not found.`);
             }
-        });
 
-        if (!pet) {
-            throw new NotFoundException(`Pet with ID ${petId} not found.`);
-        }
-
-        return pet;
+            return pet;
+        }, this.cacheService.getTTL('medium'));
     }
 
     async getAllPets(ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Pet>> {
-        const skip = (page - 1) * limit;
-        const where = { ownerId };
+        const cacheKey = CACHE_KEYS.PET.LIST(ownerId, page, limit);
 
-        const [data, totalItems] = await Promise.all([
-            this.prismaService.pet.findMany({
-                where,
-                skip,
-                take: limit,
-            }),
-            this.prismaService.pet.count({ where }),
-        ]);
+        return await this.cacheService.getOrSet(cacheKey, async () => {
+            const skip = (page - 1) * limit;
+            const where = { ownerId };
 
-        return {
-            data,
-            pagination: buildPaginationMeta(totalItems, page, limit),
-        };
+            const [data, totalItems] = await Promise.all([
+                this.prismaService.pet.findMany({
+                    where,
+                    skip,
+                    take: limit,
+                }),
+                this.prismaService.pet.count({ where }),
+            ]);
+
+            return new PaginatedResponseDto(
+                data,
+                buildPaginationMeta(totalItems, page, limit),
+            );
+        }, this.cacheService.getTTL('medium'));
     }
 
     async updatePet(petId: number, ownerId: number, updatePetDto: UpdatePetDto): Promise<Pet> {
         const pet = await this.getPetById(petId, ownerId);
 
-        if(!pet){
+        if (!pet) {
             throw new NotFoundException(`Pet with ID ${petId} not found.`);
         }
 
@@ -73,6 +89,10 @@ export class PetService {
                 where: { id: petId },
                 data: updatePetDto
             });
+
+            // Invalidate pet caches
+            await this.cacheService.invalidatePet(petId, ownerId);
+
             return updatedPet;
         } catch (error) {
             throw new BadRequestException('Failed to update pet. Please check your input.');
@@ -81,7 +101,7 @@ export class PetService {
 
     async deletePet(petId: number, ownerId: number): Promise<Pet> {
         const pet = await this.getPetById(petId, ownerId);
-        if(!pet){
+        if (!pet) {
             throw new NotFoundException(`Pet with ID ${petId} not found.`);
         }
 
@@ -89,6 +109,10 @@ export class PetService {
             const deletedPet = await this.prismaService.pet.delete({
                 where: { id: petId }
             });
+
+            // Invalidate pet caches
+            await this.cacheService.invalidatePet(petId, ownerId);
+
             return deletedPet;
         } catch (error) {
             throw new BadRequestException('Failed to delete pet.');
@@ -119,6 +143,9 @@ export class PetService {
                     pet_id: petId
                 }
             });
+
+            // Invalidate gallery caches
+            await this.cacheService.invalidateGallery(petId);
 
             return gallery;
         } catch (error) {
@@ -154,6 +181,9 @@ export class PetService {
                 data: updateGalleryDto
             });
 
+            // Invalidate gallery caches
+            await this.cacheService.invalidateGallery(petId, galleryId);
+
             return updatedGallery;
         } catch (error) {
             if (error instanceof NotFoundException) {
@@ -187,6 +217,9 @@ export class PetService {
                 where: { id: galleryId }
             });
 
+            // Invalidate gallery caches
+            await this.cacheService.invalidateGallery(petId, galleryId);
+
             return deletedGallery;
         } catch (error) {
             if (error instanceof NotFoundException) {
@@ -198,29 +231,33 @@ export class PetService {
 
     async getGallery(petId: number, ownerId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Gallery>> {
         try {
-            // Verify user owns the pet
-            const pet = await this.getPetById(petId, ownerId);
-            if (!pet) {
-                throw new NotFoundException(`Pet with ID ${petId} not found.`);
-            }
+            const cacheKey = CACHE_KEYS.PET.GALLERY(petId, page, limit);
 
-            const skip = (page - 1) * limit;
-            const where = { pet_id: petId };
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                // Verify user owns the pet
+                const pet = await this.getPetById(petId, ownerId);
+                if (!pet) {
+                    throw new NotFoundException(`Pet with ID ${petId} not found.`);
+                }
 
-            const [data, totalItems] = await Promise.all([
-                this.prismaService.gallery.findMany({
-                    where,
-                    orderBy: { order: 'asc' },
-                    skip,
-                    take: limit,
-                }),
-                this.prismaService.gallery.count({ where }),
-            ]);
+                const skip = (page - 1) * limit;
+                const where = { pet_id: petId };
 
-            return {
-                data,
-                pagination: buildPaginationMeta(totalItems, page, limit),
-            };
+                const [data, totalItems] = await Promise.all([
+                    this.prismaService.gallery.findMany({
+                        where,
+                        orderBy: { order: 'asc' },
+                        skip,
+                        take: limit,
+                    }),
+                    this.prismaService.gallery.count({ where }),
+                ]);
+
+                return new PaginatedResponseDto(
+                    data,
+                    buildPaginationMeta(totalItems, page, limit),
+                );
+            }, this.cacheService.getTTL('medium'));
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;
@@ -231,24 +268,28 @@ export class PetService {
 
     async getGalleryById(galleryId: number, petId: number, ownerId: number): Promise<Gallery> {
         try {
-            // Verify user owns the pet
-            const pet = await this.getPetById(petId, ownerId);
-            if (!pet) {
-                throw new NotFoundException(`Pet with ID ${petId} not found.`);
-            }
+            const cacheKey = CACHE_KEYS.PET.GALLERY_ITEM(petId, galleryId);
 
-            const gallery = await this.prismaService.gallery.findFirst({
-                where: {
-                    id: galleryId,
-                    pet_id: petId
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                // Verify user owns the pet
+                const pet = await this.getPetById(petId, ownerId);
+                if (!pet) {
+                    throw new NotFoundException(`Pet with ID ${petId} not found.`);
                 }
-            });
 
-            if (!gallery) {
-                throw new NotFoundException(`Gallery image not found for this pet.`);
-            }
+                const gallery = await this.prismaService.gallery.findFirst({
+                    where: {
+                        id: galleryId,
+                        pet_id: petId
+                    }
+                });
 
-            return gallery;
+                if (!gallery) {
+                    throw new NotFoundException(`Gallery image not found for this pet.`);
+                }
+
+                return gallery;
+            }, this.cacheService.getTTL('medium'));
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;

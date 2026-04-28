@@ -1,9 +1,9 @@
 import { Expose, Type } from "class-transformer";
 import { RoomDto } from "./room.dto";
 import { ValidateNested } from "class-validator";
-import { PaginationResponseDto } from "src/common/dtos/pagination-response.dto";
+import { PaginationQueryDto } from "src/common/dtos/pagination-query.dto";
 
-export class AllUserRoomsDto extends PaginationResponseDto{
+export class AllUserRoomsDto extends PaginationQueryDto{
 
     @Expose()
     @ValidateNested({ each: true })

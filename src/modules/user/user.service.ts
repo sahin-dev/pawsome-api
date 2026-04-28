@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { CacheService, CACHE_KEYS } from "src/common/services/cache.service";
 import { CreateUserDto } from "./dtos/create-user.dto";
 import { ChangePasswordDto } from "./dtos/change-password.dto";
 import { UpdateProfileDto } from "./dtos/update-profile.dto";
@@ -12,7 +13,10 @@ import bcrypt from 'bcrypt';
 @Injectable()
 export class UserService {
 
-    constructor(private readonly prismaService: PrismaService) { }
+    constructor(
+        private readonly prismaService: PrismaService,
+        private readonly cacheService: CacheService
+    ) { }
 
     async addUser(createUserDto: CreateUserDto) {
         try {
@@ -29,6 +33,9 @@ export class UserService {
                 data: { ...createUserDto, role: UserRole.USER }
             });
 
+            // Invalidate user list caches
+            await this.cacheService.invalidateUser();
+
             return data;
         } catch (error) {
             if (error instanceof BadRequestException) {
@@ -40,20 +47,39 @@ export class UserService {
 
     async getUserById(userId: number) {
         try {
-            const user = await this.prismaService.user.findUnique({
-                where: { id: userId }
-            });
+            const cacheKey = CACHE_KEYS.USER.BY_ID(userId);
 
-            if (!user) {
-                throw new NotFoundException('User not found');
-            }
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const user = await this.prismaService.user.findUnique({
+                    where: { id: userId }
+                });
 
-            return user;
+                if (!user) {
+                    throw new NotFoundException('User not found');
+                }
+
+                return user;
+            }, this.cacheService.getTTL('medium'));
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;
             }
             throw new BadRequestException('Failed to retrieve user');
+        }
+    }
+
+    async getProfile(userId: number) {
+        try {
+            const cacheKey = CACHE_KEYS.USER.PROFILE(userId);
+
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const user = await this.getUserById(userId);
+                // Remove password from profile
+                const { password, ...profileWithoutPassword } = user;
+                return profileWithoutPassword;
+            }, this.cacheService.getTTL('medium'));
+        } catch (error) {
+            throw new BadRequestException('Failed to retrieve profile');
         }
     }
 
@@ -75,6 +101,9 @@ export class UserService {
                 where: { id: userId },
                 data: { password: hashedPassword }
             });
+
+            // Invalidate user caches
+            await this.cacheService.invalidateUser(userId);
 
             return {
                 message: 'Password changed successfully',
@@ -98,6 +127,9 @@ export class UserService {
                 data: updateProfileDto
             });
 
+            // Invalidate user caches
+            await this.cacheService.invalidateUser(userId);
+
             return updatedUser;
         } catch (error) {
             if (error instanceof NotFoundException) {
@@ -109,34 +141,38 @@ export class UserService {
 
     async getAllUsers(paginationQueryDto: PaginationQueryDto): Promise<PaginatedResponseDto<any>> {
         try {
-            const skip = paginationQueryDto.getSkip();
+            const cacheKey = CACHE_KEYS.USER.ALL_USERS(paginationQueryDto.page, paginationQueryDto.limit);
 
-            const [users, total] = await Promise.all([
-                this.prismaService.user.findMany({
-                    where: {
-                        role: UserRole.USER
-                    },
-                    skip,
-                    take: paginationQueryDto.limit,
-                    orderBy: { createdAt: 'desc' },
-                    select: {
-                        id: true,
-                        fullName: true,
-                        email: true,
-                        role: true,
-                        is_email_verified: true,
-                        is_blocked: true,
-                        createdAt: true,
-                        updatedAt: true
-                    }
-                }),
-                this.prismaService.user.count({
-                    where: { role: UserRole.USER }
-                })
-            ]);
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const skip = paginationQueryDto.getSkip();
 
-            const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
-            return new PaginatedResponseDto(users, pagination);
+                const [users, total] = await Promise.all([
+                    this.prismaService.user.findMany({
+                        where: {
+                            role: UserRole.USER
+                        },
+                        skip,
+                        take: paginationQueryDto.limit,
+                        orderBy: { createdAt: 'desc' },
+                        select: {
+                            id: true,
+                            fullName: true,
+                            email: true,
+                            role: true,
+                            is_email_verified: true,
+                            is_blocked: true,
+                            createdAt: true,
+                            updatedAt: true
+                        }
+                    }),
+                    this.prismaService.user.count({
+                        where: { role: UserRole.USER }
+                    })
+                ]);
+
+                const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
+                return new PaginatedResponseDto(users, pagination);
+            }, this.cacheService.getTTL('long'));
         } catch (error) {
             throw new BadRequestException('Failed to retrieve users');
         }
@@ -144,53 +180,60 @@ export class UserService {
 
     async getAllSitters(paginationQueryDto: PaginationQueryDto): Promise<PaginatedResponseDto<any>> {
         try {
-            const skip = paginationQueryDto.getSkip();
+            const cacheKey = CACHE_KEYS.USER.ALL_SITTERS(paginationQueryDto.page, paginationQueryDto.limit);
 
-            const [sitters, total] = await Promise.all([
-                this.prismaService.user.findMany({
-                    where: {
-                        role: UserRole.SITTER
-                    },
-                    skip,
-                    take: paginationQueryDto.limit,
-                    orderBy: { createdAt: 'desc' },
-                    select: {
-                        id: true,
-                        fullName: true,
-                        email: true,
-                        role: true,
-                        is_email_verified: true,
-                        is_blocked: true,
-                        emergency_contact: true,
-                        location_lat: true,
-                        location_lng: true,
-                        createdAt: true,
-                        updatedAt: true
-                    }
-                }),
-                this.prismaService.user.count({
-                    where: { role: UserRole.SITTER }
-                })
-            ]);
+            return await this.cacheService.getOrSet(cacheKey, async () => {
+                const skip = paginationQueryDto.getSkip();
 
-            const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
-            return new PaginatedResponseDto(sitters, pagination);
+                const [sitters, total] = await Promise.all([
+                    this.prismaService.user.findMany({
+                        where: {
+                            role: UserRole.SITTER
+                        },
+                        skip,
+                        take: paginationQueryDto.limit,
+                        orderBy: { createdAt: 'desc' },
+                        select: {
+                            id: true,
+                            fullName: true,
+                            email: true,
+                            role: true,
+                            is_email_verified: true,
+                            is_blocked: true,
+                            emergency_contact: true,
+                            location_lat: true,
+                            location_lng: true,
+                            createdAt: true,
+                            updatedAt: true
+                        }
+                    }),
+                    this.prismaService.user.count({
+                        where: { role: UserRole.SITTER }
+                    })
+                ]);
+
+                const pagination = buildPaginationMeta(total, paginationQueryDto.page, paginationQueryDto.limit);
+                return new PaginatedResponseDto(sitters, pagination);
+            }, this.cacheService.getTTL('long'));
         } catch (error) {
             throw new BadRequestException('Failed to retrieve sitters');
         }
     }
 
-    async getProfile(userId: number) {
-        try {
-            const user = await this.getUserById(userId);
+    // async getProfile(userId: number) {
+    //     try {
+    //         const cacheKey = CACHE_KEYS.USER.PROFILE(userId);
 
-            const { password, ...userWithoutPassword } = user;
-            return userWithoutPassword;
-        } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to retrieve profile');
-        }
-    }
+    //         return await this.cacheService.getOrSet(cacheKey, async () => {
+    //             const user = await this.getUserById(userId);
+    //             const { password, ...userWithoutPassword } = user;
+    //             return userWithoutPassword;
+    //         }, this.cacheService.getTTL('medium'));
+    //     } catch (error) {
+    //         if (error instanceof NotFoundException) {
+    //             throw error;
+    //         }
+    //         throw new BadRequestException('Failed to retrieve profile');
+    //     }
+    // }
 }

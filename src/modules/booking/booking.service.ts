@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService, CACHE_KEYS } from 'src/common/services/cache.service';
 import { CreateBookingDto } from './dtos/createBooking.dto';
 import { AssignSitterDto } from './dtos/assign-sitter.dto';
 import { UploadToBookingDto } from './dtos/upload-to-booking.dto';
@@ -15,7 +16,10 @@ import { buildPaginationMeta } from 'src/common/utils/paginate.util';
 
 @Injectable()
 export class BookingService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   async createBooking(
     userId: number,
@@ -67,6 +71,9 @@ export class BookingService {
         },
       });
 
+      // Invalidate booking caches
+      await this.cacheService.invalidateBooking(undefined, userId);
+
       return booking;
     } catch (error) {
       if (
@@ -82,32 +89,36 @@ export class BookingService {
 
   async getBookingsByUser(userId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Booking>> {
     try {
-      const skip = (page - 1) * limit;
-      const where = {
-        pet: {
-          ownerId: userId,
-        },
-      };
+      const cacheKey = CACHE_KEYS.BOOKING.BY_USER(userId, page, limit);
 
-      const [data, totalItems] = await Promise.all([
-        this.prismaService.booking.findMany({
-          where,
-          include: {
-            service: true,
-            pet: true,
-            sitter: true,
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const skip = (page - 1) * limit;
+        const where = {
+          pet: {
+            ownerId: userId,
           },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prismaService.booking.count({ where }),
-      ]);
+        };
 
-      return {
-        data,
-        pagination: buildPaginationMeta(totalItems, page, limit),
-      };
+        const [data, totalItems] = await Promise.all([
+          this.prismaService.booking.findMany({
+            where,
+            include: {
+              service: true,
+              pet: true,
+              sitter: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prismaService.booking.count({ where }),
+        ]);
+
+        return new PaginatedResponseDto(
+          data,
+          buildPaginationMeta(totalItems, page, limit),
+        );
+      }, this.cacheService.getTTL('medium'));
     } catch (error) {
       throw new BadRequestException('Failed to retrieve bookings.');
     }
@@ -115,36 +126,42 @@ export class BookingService {
 
   async getBookingById(bookingId: number, userId?: number): Promise<Booking> {
     try {
-      const booking = await this.prismaService.booking.findUnique({
-        where: { id: bookingId },
-        include: {
-          service: true,
-          pet: true,
-          sitter: true,
-        },
-      });
+      const cacheKey = userId
+        ? `${CACHE_KEYS.BOOKING.BY_ID(bookingId)}:user:${userId}`
+        : CACHE_KEYS.BOOKING.BY_ID(bookingId);
 
-      if (!booking) {
-        throw new NotFoundException(`Booking with ID ${bookingId} not found.`);
-      }
-
-      // If userId provided, verify ownership (user must own the pet)
-      if (userId) {
-        const petOwner = await this.prismaService.pet.findFirst({
-          where: {
-            id: booking.petId,
-            ownerId: userId,
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const booking = await this.prismaService.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            service: true,
+            pet: true,
+            sitter: true,
           },
         });
 
-        if (!petOwner) {
-          throw new ForbiddenException(
-            'You do not have access to this booking.',
-          );
+        if (!booking) {
+          throw new NotFoundException(`Booking with ID ${bookingId} not found.`);
         }
-      }
 
-      return booking;
+        // If userId provided, verify ownership (user must own the pet)
+        if (userId) {
+          const petOwner = await this.prismaService.pet.findFirst({
+            where: {
+              id: booking.petId,
+              ownerId: userId,
+            },
+          });
+
+          if (!petOwner) {
+            throw new ForbiddenException(
+              'You do not have access to this booking.',
+            );
+          }
+        }
+
+        return booking;
+      }, this.cacheService.getTTL('medium'));
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -193,6 +210,9 @@ export class BookingService {
         },
       });
 
+      // Invalidate booking caches
+      await this.cacheService.invalidateBooking(bookingId, undefined, assignSitterDto.sitterId);
+
       return updatedBooking;
     } catch (error) {
       if (
@@ -228,6 +248,9 @@ export class BookingService {
           sitter: true,
         },
       });
+
+      // Invalidate booking caches
+      await this.cacheService.invalidateBooking(bookingId, undefined, cancelledBooking.sitterId || undefined);
 
       return cancelledBooking;
     } catch (error) {
@@ -265,6 +288,9 @@ export class BookingService {
           sitter: true,
         },
       });
+
+      // Invalidate booking caches
+      await this.cacheService.invalidateBooking(bookingId, undefined, sitterId);
 
       return startedBooking;
     } catch (error) {
@@ -309,6 +335,9 @@ export class BookingService {
         },
       });
 
+      // Invalidate booking caches
+      await this.cacheService.invalidateBooking(bookingId, undefined, sitterId);
+
       return completedBooking;
     } catch (error) {
       if (
@@ -350,6 +379,9 @@ export class BookingService {
         },
       });
 
+      // Invalidate booking uploads cache
+      await this.cacheService.invalidateBooking(bookingId);
+
       return upload;
     } catch (error) {
       if (
@@ -364,26 +396,30 @@ export class BookingService {
 
   async getUploadsForBooking(bookingId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<BookingUploads>> {
     try {
-      // Verify booking exists
-      await this.getBookingById(bookingId);
+      const cacheKey = CACHE_KEYS.BOOKING.UPLOADS(bookingId, page, limit);
 
-      const skip = (page - 1) * limit;
-      const where = { bookingId };
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        // Verify booking exists
+        await this.getBookingById(bookingId);
 
-      const [data, totalItems] = await Promise.all([
-        this.prismaService.bookingUploads.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prismaService.bookingUploads.count({ where }),
-      ]);
+        const skip = (page - 1) * limit;
+        const where = { bookingId };
 
-      return {
-        data,
-        pagination: buildPaginationMeta(totalItems, page, limit),
-      };
+        const [data, totalItems] = await Promise.all([
+          this.prismaService.bookingUploads.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prismaService.bookingUploads.count({ where }),
+        ]);
+
+        return new PaginatedResponseDto(
+          data,
+          buildPaginationMeta(totalItems, page, limit),
+        );
+      }, this.cacheService.getTTL('short'));
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -394,28 +430,32 @@ export class BookingService {
 
   async getBookingsBySitter(sitterId: number, page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Booking>> {
     try {
-      const skip = (page - 1) * limit;
-      const where = { sitterId };
+      const cacheKey = CACHE_KEYS.BOOKING.BY_SITTER(sitterId, page, limit);
 
-      const [data, totalItems] = await Promise.all([
-        this.prismaService.booking.findMany({
-          where,
-          include: {
-            service: true,
-            pet: true,
-            sitter: true,
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prismaService.booking.count({ where }),
-      ]);
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const skip = (page - 1) * limit;
+        const where = { sitterId };
 
-      return {
-        data,
-        pagination: buildPaginationMeta(totalItems, page, limit),
-      };
+        const [data, totalItems] = await Promise.all([
+          this.prismaService.booking.findMany({
+            where,
+            include: {
+              service: true,
+              pet: true,
+              sitter: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prismaService.booking.count({ where }),
+        ]);
+
+        return new PaginatedResponseDto(
+          data,
+          buildPaginationMeta(totalItems, page, limit),
+        );
+      }, this.cacheService.getTTL('medium'));
     } catch (error) {
       throw new BadRequestException('Failed to retrieve bookings.');
     }

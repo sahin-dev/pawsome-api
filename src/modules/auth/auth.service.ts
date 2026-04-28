@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { SmtpProvider } from "src/common/providers/smtp.provider";
+import { CacheService } from "src/common/services/cache.service";
 import { CreateUserDto } from "../user/dtos/create-user.dto";
 import { UserService } from "../user/user.service";
 import { RegisterUserDto } from "./dtos/register-user.dto";
@@ -20,7 +21,8 @@ export class AuthService {
     constructor(
         private readonly userService: UserService,
         private readonly smtpSrevice: SmtpProvider,
-        private readonly prismaService: PrismaService
+        private readonly prismaService: PrismaService,
+        private readonly cacheService: CacheService
     ) { }
 
     async registerUser(registerUserDto: RegisterUserDto) {
@@ -185,6 +187,9 @@ export class AuthService {
 
             // Clear OTP from store
             this.otpStore.delete(resetPasswordDto.email);
+
+            // Invalidate user caches after password reset
+            await this.cacheService.invalidateUser(user.id);
 
             return {
                 message: 'Password reset successfully',

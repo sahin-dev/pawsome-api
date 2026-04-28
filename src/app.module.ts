@@ -9,11 +9,22 @@ import { ServiceModule } from './modules/service/service.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModuleConfig } from './common/modules/cache.module';
 import dbConfig from './config/db.config';
 import smtpConfig from './config/smtp.config';
 
 @Module({
-  imports: [ConfigModule.forRoot({load:[dbConfig, smtpConfig], isGlobal:true}), PrismaModule, AuthModule, UserModule, PetModule, ServiceModule, BookingModule, FileUploadModule],
+  imports: [
+    ConfigModule.forRoot({ load: [dbConfig, smtpConfig], isGlobal: true }),
+    CacheModuleConfig,
+    PrismaModule,
+    AuthModule,
+    UserModule,
+    PetModule,
+    ServiceModule,
+    BookingModule,
+    FileUploadModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

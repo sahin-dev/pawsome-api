@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService, CACHE_KEYS } from 'src/common/services/cache.service';
 import { CreateServiceDto } from './dtos/create-service.dto';
 import { UpdateServiceDto } from './dtos/update-service.dto';
 import { Service } from 'generated/prisma/browser';
@@ -8,13 +9,20 @@ import { buildPaginationMeta } from 'src/common/utils/paginate.util';
 
 @Injectable()
 export class ServiceService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   async createService(createServiceDto: CreateServiceDto): Promise<Service> {
     try {
       const service = await this.prismaService.service.create({
         data: createServiceDto,
       });
+
+      // Invalidate service list caches
+      await this.cacheService.invalidateService();
+
       return service;
     } catch (error) {
       throw new BadRequestException('Failed to create service. Please check your input.');
@@ -23,19 +31,23 @@ export class ServiceService {
 
   async getAllServices(page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Service>> {
     try {
-      const skip = (page - 1) * limit;
+      const cacheKey = CACHE_KEYS.SERVICE.LIST(page, limit);
 
-      const [data, totalItems] = await Promise.all([
-        this.prismaService.service.findMany({
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prismaService.service.count(),
-      ]);
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const skip = (page - 1) * limit;
 
-      const pagination = buildPaginationMeta(totalItems, page, limit);
-      return new PaginatedResponseDto(data, pagination);
+        const [data, totalItems] = await Promise.all([
+          this.prismaService.service.findMany({
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prismaService.service.count(),
+        ]);
+
+        const pagination = buildPaginationMeta(totalItems, page, limit);
+        return new PaginatedResponseDto(data, pagination);
+      }, this.cacheService.getTTL('long'));
     } catch (error) {
       throw new BadRequestException('Failed to retrieve services.');
     }
@@ -43,15 +55,19 @@ export class ServiceService {
 
   async getServiceById(id: number): Promise<Service> {
     try {
-      const service = await this.prismaService.service.findUnique({
-        where: { id },
-      });
+      const cacheKey = CACHE_KEYS.SERVICE.BY_ID(id);
 
-      if (!service) {
-        throw new NotFoundException(`Service with ID ${id} not found.`);
-      }
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const service = await this.prismaService.service.findUnique({
+          where: { id },
+        });
 
-      return service;
+        if (!service) {
+          throw new NotFoundException(`Service with ID ${id} not found.`);
+        }
+
+        return service;
+      }, this.cacheService.getTTL('long'));
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -62,21 +78,25 @@ export class ServiceService {
 
   async getActiveServices(page: number = 1, limit: number = 10): Promise<PaginatedResponseDto<Service>> {
     try {
-      const skip = (page - 1) * limit;
-      const where = { status: 'ACTIVE' as const };
+      const cacheKey = CACHE_KEYS.SERVICE.ACTIVE(page, limit);
 
-      const [data, totalItems] = await Promise.all([
-        this.prismaService.service.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prismaService.service.count({ where }),
-      ]);
+      return await this.cacheService.getOrSet(cacheKey, async () => {
+        const skip = (page - 1) * limit;
+        const where = { status: 'ACTIVE' as const };
 
-      const pagination = buildPaginationMeta(totalItems, page, limit);
-      return new PaginatedResponseDto(data, pagination);
+        const [data, totalItems] = await Promise.all([
+          this.prismaService.service.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+          this.prismaService.service.count({ where }),
+        ]);
+
+        const pagination = buildPaginationMeta(totalItems, page, limit);
+        return new PaginatedResponseDto(data, pagination);
+      }, this.cacheService.getTTL('long'));
     } catch (error) {
       throw new BadRequestException('Failed to retrieve active services.');
     }
@@ -91,6 +111,10 @@ export class ServiceService {
         where: { id },
         data: updateServiceDto,
       });
+
+      // Invalidate service caches
+      await this.cacheService.invalidateService(id);
+
       return updatedService;
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -108,6 +132,10 @@ export class ServiceService {
       const deletedService = await this.prismaService.service.delete({
         where: { id },
       });
+
+      // Invalidate service caches
+      await this.cacheService.invalidateService(id);
+
       return deletedService;
     } catch (error) {
       if (error instanceof NotFoundException) {

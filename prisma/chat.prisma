@@ -52,7 +52,8 @@ model BlockList {
 model Chat {
   id           Int      @id @default(autoincrement())
   chatRoom_id  Int
-  sender_id    Int        
+  sender_id    Int 
+  receiver_id Int       
   message      String
   type         MessageType @default(TEXT)
 
@@ -60,7 +61,8 @@ model Chat {
   is_delivered Boolean     @default(false)
 
   chatRoom ChatRoom @relation(fields: [chatRoom_id], references: [id])
-  sender   User     @relation(fields: [sender_id], references: [id])
+  sender   User     @relation("sender", fields: [sender_id], references: [id])
+  recipient User     @relation("recipient", fields: [receiver_id], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

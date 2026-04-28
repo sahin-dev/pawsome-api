@@ -61,7 +61,11 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
         try {
             const userId = client.handshake.query.userId as string
-            const user = await this.userService.findUserById(userId)
+            const userIdNumber = parseInt(userId, 10);
+            if (isNaN(userIdNumber)) {
+                throw new Error("Invalid userId format");
+            }
+            const user = await this.userService.getUserById(userIdNumber)
 
             if (!user) {
 
@@ -105,13 +109,17 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         try {
 
             const userId = client.data.userId
+            const userIdNumber = parseInt(userId, 10);
 
             console.log(data)
 
-            const chat = await this.chatService.createMessage(userId, data)
+            const chat = await this.chatService.createMessage(userIdNumber, data)
 
+            if (!data.receiver_id) {
+                throw new Error('receiver_id is required');
+            }
             const receiverRoomId = this.usersSocket.get(data.receiver_id.toString())
-            const sender = this.usersSocket.get(userId.toString())
+            const sender = this.usersSocket.get(userIdNumber.toString())
 
             if (receiverRoomId) {
                 this.server.to(receiverRoomId).emit(EMIT_EVENTS.NEW_MESSAGE, { ...chat, is_mine: false })
@@ -133,8 +141,13 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     async handleMesssageDelivery(@MessageBody() acknowledgements: MessageAcknowledgementDto, @ConnectedSocket() client: Socket) {
 
         acknowledgements.messageIds.forEach(async (messageId) => {
-            const chat = await this.chatService.acknowledgeMessageDelivery(messageId)
-            const senderSocketId = this.usersSocket.get(chat.sender_id)
+            const messageIdNumber = parseInt(messageId.toString(), 10);
+            if (isNaN(messageIdNumber)) {
+                console.log(`Invalid messageId: ${messageId}`);
+                return;
+            }
+            const chat = await this.chatService.acknowledgeMessageDelivery(messageIdNumber)
+            const senderSocketId = this.usersSocket.get(chat.sender_id.toString())
 
             if (senderSocketId) {
                 this.server.to(senderSocketId).emit(EMIT_EVENTS.MESSAGE_DELIVERED, chat)

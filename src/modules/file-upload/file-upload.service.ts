@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Multer } from 'multer';
 
 @Injectable()
 export class FileUploadService {
