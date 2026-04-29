@@ -12,8 +12,8 @@ import { GetUserRoomsDto } from "../dtos/get-user-rooms.dto";
 import { AllUserRoomsDto } from "../dtos/all-user-rooms.dto";
 import { MessageAcknowledgementDto } from "../dtos/message-acknowledgement.dto";
 import { WsExceptionsFilter } from "src/common/exceptions/WsExceptionHandler";
-
-
+import { SocketRegistryService } from "../services/socket-registry.service";
+import { SocketAuthService } from "../services/socket-auth.service";
 
 @WebSocketGateway({
     cors: {
@@ -33,214 +33,297 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     @WebSocketServer()
     server: Server
 
-    private usersSocket: Map<string, string>
-    private roomSubscriptions: Map<string, Set<string>>
+    constructor(
+        private readonly chatService: ChatService,
+        private readonly userService: UserService,
+        private readonly socketRegistry: SocketRegistryService,
+        private readonly socketAuth: SocketAuthService
+    ) {}
 
-    constructor(private readonly chatService: ChatService,private readonly userService: UserService) {
-        this.usersSocket = new Map<string, string>()
-        this.roomSubscriptions = new Map<string, Set<string>>()
-    }
-
-    handleDisconnect(client: Socket) {
-        console.log(`client disconnected: ${client.id}`)
-
-        // Find the userId associated with the disconnected socket ID
-        // Note: client.data.userId is the safest way to get the userId here
-        const userId = client.data.userId
-
-        if (userId) {
-            // Remove the userId and its old client.id from the map
-            this.usersSocket.delete(userId)
-            console.log(`User ${userId} removed from usersSocket map.`)
+    async handleDisconnect(client: Socket) {
+        console.log(`client disconnected: ${client.id}`);
+        try {
+            await this.socketRegistry.removeUserSocket(client.id);
+            const userId = client.data.userId;
+            if (userId) {
+                console.log(`User ${userId} removed from socket registry.`);
+            }
+        } catch (err: any) {
+            console.error(`Error handling disconnect for socket ${client.id}:`, err);
         }
     }
-
 
     async handleConnection(client: Socket, ...args: any[]) {
-        console.log(`client connected: ${client.id}`)
+        console.log(`client connected: ${client.id}`);
 
         try {
-            const userId = client.handshake.query.userId as string
-            const userIdNumber = parseInt(userId, 10);
-            if (isNaN(userIdNumber)) {
-                throw new Error("Invalid userId format");
-            }
-            const user = await this.userService.getUserById(userIdNumber)
+            // Authenticate using JWT token from handshake
+            const jwtPayload = this.socketAuth.authenticateSocket(client.handshake);
+            const userId = jwtPayload.id.toString();
+            const userEmail = jwtPayload.email;
 
+            // Verify user still exists in database
+            const user = await this.userService.getUserById(jwtPayload.id);
             if (!user) {
-
-                throw new Error("use not found")
+                throw new Error("User not found");
             }
-            // Store the userId and its associated client.id
-            this.usersSocket.set(userId, client.id)
 
-            client.data.userId = userId
+            // Store the userId and its associated socket ID in Redis
+            await this.socketRegistry.setUserSocket(userId, client.id);
+            
+            // Store user info in socket for later use
+            client.data.userId = userId;
+            client.data.userEmail = userEmail;
+            client.data.userRole = jwtPayload.role;
 
-            client.emit(EMIT_EVENTS.SUCCESS, { message: "User Successfully Connected With Socket" })
+            client.emit(EMIT_EVENTS.SUCCESS, { 
+                message: "User Successfully Connected With Socket",
+                userId: userId,
+                email: userEmail
+            });
 
-        } catch (err:any) {
-            console.log(err)
-            throw new WsException({ message: err.message })
-
+        } catch (err: any) {
+            console.error("Connection error:", err);
+            client.disconnect();
+            throw new WsException({ message: err.message });
         }
-        // client.join(client.id)
-
     }
 
     afterInit(server: any) {
-        console.log("Websocket server initialized")
+        console.log("Websocket server initialized");
     }
 
-
     @SubscribeMessage("greeting")
-    handleMessage(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-
-
+    handleGreeting(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+        const userId = client.data.userId;
+        if (userId) {
+            client.emit("greeting-response", { message: `Hello user ${userId}` });
+        }
     }
 
     /**
-     * 
-     * @param data 
-     * @param client 
+     * Handle sending messages between users
      */
-
     @SubscribeMessage(SUBSCRIBED_EVENTS.MESSAGE)
     async handleChat(@MessageBody() data: SendMessageDto, @ConnectedSocket() client: Socket) {
         try {
+            const userId = client.data.userId;
 
-            const userId = client.data.userId
+            if (!userId) {
+                throw new Error("User not authenticated");
+            }
+
             const userIdNumber = parseInt(userId, 10);
 
-            console.log(data)
+            console.log("Message data:", data);
 
-            const chat = await this.chatService.createMessage(userIdNumber, data)
+            const chat = await this.chatService.createMessage(userIdNumber, data);
 
             if (!data.receiver_id) {
-                throw new Error('receiver_id is required');
-            }
-            const receiverRoomId = this.usersSocket.get(data.receiver_id.toString())
-            const sender = this.usersSocket.get(userIdNumber.toString())
-
-            if (receiverRoomId) {
-                this.server.to(receiverRoomId).emit(EMIT_EVENTS.NEW_MESSAGE, { ...chat, is_mine: false })
+                throw new Error("receiver_id is required");
             }
 
-            if (sender) {
-                this.server.to(sender).emit(EMIT_EVENTS.MESSAGE_SENT, { ...chat, is_mine: true })
+            // Get socket ID from Redis for receiver and sender
+            const receiverSocketId = await this.socketRegistry.getUserSocket(
+                data.receiver_id.toString()
+            );
+            const senderSocketId = await this.socketRegistry.getUserSocket(userId);
+
+            if (receiverSocketId) {
+                this.server.to(receiverSocketId).emit(EMIT_EVENTS.NEW_MESSAGE, {
+                    ...chat,
+                    is_mine: false,
+                });
             }
-        } catch (err: any) {
-            // client.emit("message-error", { message: err.message })
-            console.log(err)
-            throw new WsException({ message: err.message })
-        }
-
-    }
-
-
-    @SubscribeMessage(SUBSCRIBED_EVENTS.MESSAGE_RECEIVED)
-    async handleMesssageDelivery(@MessageBody() acknowledgements: MessageAcknowledgementDto, @ConnectedSocket() client: Socket) {
-
-        acknowledgements.messageIds.forEach(async (messageId) => {
-            const messageIdNumber = parseInt(messageId.toString(), 10);
-            if (isNaN(messageIdNumber)) {
-                console.log(`Invalid messageId: ${messageId}`);
-                return;
-            }
-            const chat = await this.chatService.acknowledgeMessageDelivery(messageIdNumber)
-            const senderSocketId = this.usersSocket.get(chat.sender_id.toString())
 
             if (senderSocketId) {
-                this.server.to(senderSocketId).emit(EMIT_EVENTS.MESSAGE_DELIVERED, chat)
+                this.server.to(senderSocketId).emit(EMIT_EVENTS.MESSAGE_SENT, {
+                    ...chat,
+                    is_mine: true,
+                });
             }
-        })
+        } catch (err: any) {
+            console.error("Chat error:", err);
+            throw new WsException({ message: err.message });
+        }
     }
 
     /**
-     * 
-     * @param receiverId 
-     * @param chat 
+     * Handle message delivery acknowledgement
      */
+    @SubscribeMessage(SUBSCRIBED_EVENTS.MESSAGE_RECEIVED)
+    async handleMessageDelivery(
+        @MessageBody() acknowledgements: MessageAcknowledgementDto,
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            for (const messageId of acknowledgements.messageIds) {
+                const messageIdNumber = parseInt(messageId.toString(), 10);
+                if (isNaN(messageIdNumber)) {
+                    console.warn(`Invalid messageId: ${messageId}`);
+                    continue;
+                }
 
+                const chat = await this.chatService.acknowledgeMessageDelivery(
+                    messageIdNumber
+                );
+                const senderSocketId = await this.socketRegistry.getUserSocket(
+                    chat.sender_id.toString()
+                );
 
+                if (senderSocketId) {
+                    this.server.to(senderSocketId).emit(EMIT_EVENTS.MESSAGE_DELIVERED, chat);
+                }
+            }
+        } catch (err: any) {
+            console.error("Message delivery acknowledgement error:", err);
+            throw new WsException({ message: err.message });
+        }
+    }
+
+    /**
+     * Handle file sending
+     */
     @SubscribeMessage(SUBSCRIBED_EVENTS.SEND_FILE)
-    async handleFile(receiverId: string, chat: any) {
+    async handleFile(
+        @MessageBody() data: { receiverId: string; chat: any },
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            const socketId = await this.socketRegistry.getUserSocket(data.receiverId);
 
-
-        const socketRoomId = this.usersSocket.get(receiverId)
-
-        if (socketRoomId) {
-            this.server.to(socketRoomId).emit(EMIT_EVENTS.NEW_MESSAGE, chat)
+            if (socketId) {
+                this.server.to(socketId).emit(EMIT_EVENTS.NEW_MESSAGE, data.chat);
+            }
+        } catch (err: any) {
+            console.error("File sending error:", err);
+            throw new WsException({ message: err.message });
         }
     }
 
     /**
-     * 
-     * @param data 
-     * @param client 
+     * Get all user chat rooms
      */
-
     @SubscribeMessage(SUBSCRIBED_EVENTS.FETCH_CHAT_ROOMS)
-    async getAllUserRooms(@MessageBody() getUserRoomsDto: GetUserRoomsDto, @ConnectedSocket() client: Socket) {
-        const userId = client.data.userId
+    async getAllUserRooms(
+        @MessageBody() getUserRoomsDto: GetUserRoomsDto,
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            const userId = client.data.userId;
 
-        const rooms = await this.chatService.getUserChatRooms(userId, getUserRoomsDto)
-        console.log(rooms)
-        const roomDto = plainToInstance(AllUserRoomsDto, rooms, {
-            excludeExtraneousValues: true
-        })
-
-        const socketRoomId = this.usersSocket.get(userId)
-
-        if (socketRoomId) {
-            this.server.to(socketRoomId).emit(EMIT_EVENTS.ALL_CHAT_ROOMS, {
-                ...roomDto
-            })
-        }
-    }
-
-    @SubscribeMessage(SUBSCRIBED_EVENTS.FETCH_MESSAGES)
-    async getAllRoomMessages(@MessageBody() getAllMessageDto: GetAllMessagesDto, @ConnectedSocket() client: Socket) {
-        const userId = client.data.userId
-
-
-        const messages = await this.chatService.getRoomMessages(userId, getAllMessageDto)
-
-        const socketRoomId = this.usersSocket.get(userId)
-
-        const messageDto = plainToInstance(AllMessageDto, messages, {
-            excludeExtraneousValues: true
-        })
-
-        if (socketRoomId) {
-            this.server.to(socketRoomId).emit(EMIT_EVENTS.ALL_MESSAGES, {
-                ...messageDto
-            })
-        }
-    }
-
-    @SubscribeMessage(SUBSCRIBED_EVENTS.SUBSCRIBE_ROOM)
-    async subscribeToRoom(roomId: number, userId: string) {
-        const roomKey = `room_${roomId}`
-        if (!this.roomSubscriptions.has(roomKey)) {
-            this.roomSubscriptions.set(roomKey, new Set<string>())
-        }
-        const subscribers = this.roomSubscriptions.get(roomKey)
-        if (subscribers) {
-            subscribers.add(userId)
-        }
-    }
-
-    @SubscribeMessage(SUBSCRIBED_EVENTS.UNSUBSCRIBE_ROOM)
-    async unsubscribeFromRoom(roomId: number, userId: string) {
-        const roomKey = `room_${roomId}`
-        const subscribers = this.roomSubscriptions.get(roomKey)
-        if (subscribers) {
-            subscribers.delete(userId)
-            if (subscribers.size === 0) {
-                this.roomSubscriptions.delete(roomKey)
+            if (!userId) {
+                throw new Error("User not authenticated");
             }
+
+            const userIdNumber = parseInt(userId, 10);
+
+            const rooms = await this.chatService.getUserChatRooms(
+                userIdNumber,
+                getUserRoomsDto
+            );
+            console.log("User rooms:", rooms);
+
+            const roomDto = plainToInstance(AllUserRoomsDto, rooms, {
+                excludeExtraneousValues: true,
+            });
+
+            const socketId = await this.socketRegistry.getUserSocket(userId);
+
+            if (socketId) {
+                this.server.to(socketId).emit(EMIT_EVENTS.ALL_CHAT_ROOMS, roomDto);
+            }
+        } catch (err: any) {
+            console.error("Fetch chat rooms error:", err);
+            throw new WsException({ message: err.message });
         }
     }
 
+    /**
+     * Get all messages in a room
+     */
+    @SubscribeMessage(SUBSCRIBED_EVENTS.FETCH_MESSAGES)
+    async getAllRoomMessages(
+        @MessageBody() getAllMessageDto: GetAllMessagesDto,
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            const userId = client.data.userId;
 
+            if (!userId) {
+                throw new Error("User not authenticated");
+            }
+
+            const userIdNumber = parseInt(userId, 10);
+
+            const messages = await this.chatService.getRoomMessages(
+                userIdNumber,
+                getAllMessageDto
+            );
+
+            const socketId = await this.socketRegistry.getUserSocket(userId);
+
+            const messageDto = plainToInstance(AllMessageDto, messages, {
+                excludeExtraneousValues: true,
+            });
+
+            if (socketId) {
+                this.server.to(socketId).emit(EMIT_EVENTS.ALL_MESSAGES, messageDto);
+            }
+        } catch (err: any) {
+            console.error("Fetch messages error:", err);
+            throw new WsException({ message: err.message });
+        }
+    }
+
+    /**
+     * Subscribe user to a room
+     */
+    @SubscribeMessage(SUBSCRIBED_EVENTS.SUBSCRIBE_ROOM)
+    async subscribeToRoom(
+        @MessageBody() data: { roomId: number },
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            const userId = client.data.userId;
+
+            if (!userId) {
+                throw new Error("User not authenticated");
+            }
+
+            const userIdNumber = parseInt(userId, 10);
+            await this.socketRegistry.subscribeToRoom(data.roomId, userIdNumber.toString());
+            console.log(`User ${userIdNumber} subscribed to room ${data.roomId}`);
+        } catch (err: any) {
+            console.error("Subscribe to room error:", err);
+            throw new WsException({ message: err.message });
+        }
+    }
+
+    /**
+     * Unsubscribe user from a room
+     */
+    @SubscribeMessage(SUBSCRIBED_EVENTS.UNSUBSCRIBE_ROOM)
+    async unsubscribeFromRoom(
+        @MessageBody() data: { roomId: number },
+        @ConnectedSocket() client: Socket
+    ) {
+        try {
+            const userId = client.data.userId;
+
+            if (!userId) {
+                throw new Error("User not authenticated");
+            }
+
+            const userIdNumber = parseInt(userId, 10);
+            await this.socketRegistry.unsubscribeFromRoom(
+                data.roomId,
+                userIdNumber.toString()
+            );
+            console.log(`User ${userIdNumber} unsubscribed from room ${data.roomId}`);
+        } catch (err: any) {
+            console.error("Unsubscribe from room error:", err);
+            throw new WsException({ message: err.message });
+        }
+    }
 }
