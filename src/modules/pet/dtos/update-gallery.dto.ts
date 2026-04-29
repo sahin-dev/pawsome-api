@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   Min,
+  Max,
 } from 'class-validator';
 
 export class UpdateGalleryDto {
@@ -13,6 +14,7 @@ export class UpdateGalleryDto {
 
   @IsNumber()
   @IsOptional()
-  @Min(0)
+  @Min(1)
+  @Max(3)
   order?: number;
 }

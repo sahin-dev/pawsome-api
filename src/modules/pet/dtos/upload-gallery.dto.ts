@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   Min,
+  Max,
 } from 'class-validator';
 
 export class UploadGalleryDto {
@@ -15,5 +16,6 @@ export class UploadGalleryDto {
   @IsNumber()
   @IsOptional()
   @Min(0)
-  order?: number;
+  @Max(3)
+  order: number;
 }

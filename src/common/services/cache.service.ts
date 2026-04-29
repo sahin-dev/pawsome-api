@@ -43,9 +43,9 @@ export const CACHE_KEYS = {
 
 // Default TTL values (in seconds)
 const DEFAULT_TTLS = {
-  SHORT: 5 * 60, // 5 minutes
-  MEDIUM: 15 * 60, // 15 minutes
-  LONG: 60 * 60, // 1 hour
+  SHORT: 1, // 5 minutes
+  MEDIUM: 1, // 15 minutes
+  LONG: 1, // 1 hour
 };
 
 @Injectable()

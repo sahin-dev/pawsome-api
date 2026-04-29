@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, Logger, Inject } from "@nestjs/common";
 import { SmtpProvider } from "src/common/providers/smtp.provider";
 import { CacheService } from "src/common/services/cache.service";
 import { CreateUserDto } from "../user/dtos/create-user.dto";
@@ -12,17 +12,24 @@ import { PrismaService } from "../prisma/prisma.service";
 import bcrypt from 'bcrypt'
 import { createReadStream } from 'fs'
 import jwt from 'jsonwebtoken'
+import { JwtService } from "@nestjs/jwt";
+import jwtConfig from "src/config/jwt.config";
+import type{ ConfigType } from "@nestjs/config";
 
 @Injectable()
 export class AuthService {
 
     private otpStore: Map<string, { otp: string; expiresAt: number }> = new Map();
+    private logger = new Logger(AuthService.name);
 
     constructor(
         private readonly userService: UserService,
         private readonly smtpSrevice: SmtpProvider,
         private readonly prismaService: PrismaService,
-        private readonly cacheService: CacheService
+        private readonly cacheService: CacheService,
+        private readonly jwtService: JwtService,
+        @Inject(jwtConfig.KEY)
+        private readonly jwtConfigOptions:ConfigType<typeof jwtConfig>
     ) { }
 
     async registerUser(registerUserDto: RegisterUserDto) {
@@ -82,8 +89,14 @@ export class AuthService {
             if (user.is_blocked) {
                 throw new UnauthorizedException('User account is blocked');
             }
-
-            const accessToken = this.generateToken(user);
+            const payload = {
+                id: user.id,
+                email: user.email,
+                role: user.role
+            }
+            
+            const accessToken = await this.jwtService.signAsync(payload, 
+                {secret:this.jwtConfigOptions.jwt_secret, expiresIn:this.jwtConfigOptions.expires_in});
 
             return {
                 accessToken,
@@ -98,6 +111,7 @@ export class AuthService {
             if (error instanceof UnauthorizedException) {
                 throw error;
             }
+            this.logger.error('Login error', error);
             throw new BadRequestException('Login failed');
         }
     }

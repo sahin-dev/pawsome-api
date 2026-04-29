@@ -64,6 +64,7 @@ export class UserService {
             if (error instanceof NotFoundException) {
                 throw error;
             }
+            console.log(error)
             throw new BadRequestException('Failed to retrieve user');
         }
     }

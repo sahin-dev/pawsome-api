@@ -19,11 +19,20 @@ export class AddPetDto {
     @IsNotEmpty()
     @IsNumber()
     @Min(0)
+    @Transform(({ value }) => Number(value))
     age: number
+
 
     @IsNotEmpty()
     @IsNumber()
     @Min(0)
+    @Transform(({ value }) => Number(value))
+    weight: number
+
+    @IsNotEmpty()
+    @IsNumber()
+    @Min(0)
+    @Transform(({ value }) => Number(value))    
     size: number
 
     @IsString()

@@ -1,0 +1,23 @@
+config:
+  target: "http://localhost:3007"
+  variables:
+    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiZW1haWwiOiJhYmMxMEBlbWFpbC5jb20iLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc3NzQ1NDk5MiwiZXhwIjoxODA4OTkwOTkyfQ.G59ZMatRjuE7ydUh8XloYGMfRTcuhG7NGDAA2C13me4"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      rampTo: 20
+      name: "warm up"
+    - duration: 60
+      arrivalRate: 10
+      rampTo: 50
+      name: Ramp up to peak load
+    - duration: 300
+      arrivalRate: 50
+      name: Sustained peak load
+scenarios:
+  - name: "get pets"
+    flow:
+      - get:
+          url: "/pets"
+          headers:
+            Authorization: "Bearer {{ token }}"

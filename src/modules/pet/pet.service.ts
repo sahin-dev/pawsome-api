@@ -115,6 +115,7 @@ export class PetService {
 
             return deletedPet;
         } catch (error) {
+            console.log(error)
             throw new BadRequestException('Failed to delete pet.');
         }
     }
@@ -129,17 +130,21 @@ export class PetService {
             }
 
             // Get the highest order number to auto-increment
-            const lastImage = await this.prismaService.gallery.findFirst({
-                where: { pet_id: petId },
+            const slimilarOrderFound = await this.prismaService.gallery.findFirst({
+                where: { pet_id: petId, order: uploadGalleryDto.order},
                 orderBy: { order: 'desc' }
             });
 
-            const nextOrder = lastImage ? lastImage.order + 1 : 0;
+            if(slimilarOrderFound){
+                await this.cacheService.invalidateGallery(petId, slimilarOrderFound.id);
+                return this.updateGallery(slimilarOrderFound.id, petId, ownerId, uploadGalleryDto)
+            }
+
 
             const gallery = await this.prismaService.gallery.create({
                 data: {
                     url: uploadGalleryDto.url,
-                    order: uploadGalleryDto.order ?? nextOrder,
+                    order: uploadGalleryDto.order,
                     pet_id: petId
                 }
             });

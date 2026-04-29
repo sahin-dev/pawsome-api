@@ -8,7 +8,7 @@ import { PetResponseDto } from "./dtos/pet-response.dto";
 import { GalleryResponseDto } from "./dtos/gallery-response.dto";
 import { PaginationQueryDto } from "src/common/dtos/pagination-query.dto";
 import { PetService } from "./pet.service";
-import { TokenPayload } from "../auth/type/TokenPayload.type";
+import { TokenPayload } from "../auth/types/TokenPayload.type";
 
 @Controller('pets')
 export class PetController {

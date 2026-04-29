@@ -3,7 +3,7 @@ import { ChatService } from "./chat.service";
 import { GetUserRoomsDto } from "./dtos/get-user-rooms.dto";
 import { GetAllMessagesDto } from "./dtos/get-all-messages.dto";
 
-import { TokenPayload } from "../auth/type/TokenPayload.type";
+import { TokenPayload } from "../auth/types/TokenPayload.type";
 
 @Controller("chat")
 

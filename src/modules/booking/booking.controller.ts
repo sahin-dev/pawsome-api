@@ -19,7 +19,7 @@ import { PaginationQueryDto } from 'src/common/dtos/pagination-query.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { UserRole } from 'generated/prisma/enums';
-import { TokenPayload } from '../auth/type/TokenPayload.type';
+import { TokenPayload } from '../auth/types/TokenPayload.type';
 
 @Controller('bookings')
 @UseGuards(RolesGuard)

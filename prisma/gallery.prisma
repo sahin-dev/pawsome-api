@@ -4,7 +4,7 @@ model Gallery {
     order Int
     url  String
     pet_id      Int
-    pet  Pet  @relation(fields:[pet_id], references:[id])
+    pet  Pet  @relation(fields:[pet_id], references:[id], onDelete:Cascade)
 
     createdAt  DateTime @default(now())
     updatedAt  DateTime @updatedAt

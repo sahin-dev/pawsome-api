@@ -1,6 +1,5 @@
 import { Global, Module } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
-import redisStore from 'cache-manager-redis-yet';
 import { CacheService } from '../services/cache.service';
 
 @Global()
@@ -8,7 +7,6 @@ import { CacheService } from '../services/cache.service';
   imports: [
     NestCacheModule.register({
       isGlobal: true,
-      store: redisStore as any,
       socket: {
         host: process.env.REDIS_HOST,
         port: parseInt(process.env.REDIS_PORT || '6379', 10),

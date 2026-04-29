@@ -6,13 +6,14 @@ model Pet {
     breed String
     age Float
     size Float
+    weight Float
     medical_notes  String?
     feeding_instructions  String?
     behaviour_notes  String?
     special_instructions  String?
     images   String[]
     ownerId  Int
-    owner  User  @relation(fields:[ownerId], references:[id])
+    owner  User  @relation(fields:[ownerId], references:[id],onDelete: Cascade)
     bookings  Booking[]
     gallery  Gallery[] 
     createdAt  DateTime  @default(now())
