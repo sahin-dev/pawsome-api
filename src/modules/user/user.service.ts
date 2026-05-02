@@ -157,7 +157,9 @@ export class UserService {
                         orderBy: { createdAt: 'desc' },
                         select: {
                             id: true,
-                            fullName: true,
+                            first_name: true,
+                            last_name:true,
+                            phone:true,
                             email: true,
                             role: true,
                             is_email_verified: true,
@@ -196,14 +198,14 @@ export class UserService {
                         orderBy: { createdAt: 'desc' },
                         select: {
                             id: true,
-                            fullName: true,
+                            first_name: true,
+                            last_name:true,
+                            phone:true,
                             email: true,
                             role: true,
                             is_email_verified: true,
                             is_blocked: true,
                             emergency_contact: true,
-                            location_lat: true,
-                            location_lng: true,
                             createdAt: true,
                             updatedAt: true
                         }

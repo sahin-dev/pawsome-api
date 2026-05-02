@@ -18,6 +18,7 @@ export class CreateServiceDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsOptional()
   icon: string;
 
   @IsString()

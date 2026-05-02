@@ -43,11 +43,19 @@ export class AuthService {
                 throw new BadRequestException('Email already registered');
             }
 
+            const exisitingUserWithPhone = await this.prismaService.user.findUnique({where:{phone:registerUserDto.phone}})
+
+            if(exisitingUserWithPhone){
+                throw new BadRequestException("Phone already registered")
+            }
+
             const hashedPassword = await this.hash(registerUserDto.password);
 
             const createUserDto: CreateUserDto = {
-                fullName: registerUserDto.fullName,
+                first_name: registerUserDto.firstName,
+                last_name:registerUserDto.lastName,
                 email: registerUserDto.email,
+                phone: registerUserDto.phone,
                 password: hashedPassword
             }
 
@@ -56,8 +64,10 @@ export class AuthService {
 
             return {
                 id: createdUser.id,
-                fullName: createdUser.fullName,
+                first_name: createdUser.first_name,
+                last_name:createdUser.last_name,
                 email: createdUser.email,
+                phone:createdUser.phone,
                 role: createdUser.role,
                 createdAt: createdUser.createdAt,
                 updatedAt: createdUser.updatedAt
@@ -100,12 +110,7 @@ export class AuthService {
 
             return {
                 accessToken,
-                user: {
-                    id: user.id,
-                    fullName: user.fullName,
-                    email: user.email,
-                    role: user.role
-                }
+                user: user
             };
         } catch (error) {
             if (error instanceof UnauthorizedException) {
@@ -221,7 +226,7 @@ export class AuthService {
     async sendWelcomeMail(to: string) {
         try {
             const welcomeFileStream = createReadStream(process.cwd() + "/src/templates/welcome.template.html");
-
+            
             this.smtpSrevice.sendMail({
                 to,
                 subject: "Welcome to PAWSOME!",

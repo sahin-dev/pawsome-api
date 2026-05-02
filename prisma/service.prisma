@@ -2,7 +2,7 @@ model Service {
 
     id  Int  @id @default(autoincrement())
     title  String
-    icon  String
+    icon  String?
     description String
     price Float
     duration  Float
@@ -27,4 +27,5 @@ enum DurationUnit {
     day
     week
     month
+    hr
 }

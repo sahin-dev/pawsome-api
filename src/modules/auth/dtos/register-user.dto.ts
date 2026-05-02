@@ -8,12 +8,23 @@ export class RegisterUserDto {
     @IsNotEmpty()
     @MinLength(3)
     @Transform(({value})=> typeof value === 'string' ? value.trim():value)
-    fullName:string
+    firstName:string
+
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(3)
+    @Transform(({value})=> typeof value === 'string' ? value.trim():value)
+    lastName:string
 
     @IsEmail({}, {message:"Invalid email address!"})
     @IsNotEmpty()
     @Transform(({value})=> typeof value === 'string' ? value.trim():value)
     email:string
+
+
+    @IsNotEmpty()
+    @Transform(({value})=> typeof value === 'string' ? value.trim():value)
+    phone:string
 
     @IsString()
     @IsNotEmpty()

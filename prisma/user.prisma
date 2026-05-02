@@ -1,7 +1,10 @@
 model User {
     id   Int  @id @default(autoincrement())
-    fullName String 
+    avatar  String?
+    first_name String 
+    last_name String
     email   String @unique
+    phone  String  @unique
     password    String 
     role  UserRole
     last_assigned  DateTime?
@@ -17,8 +20,6 @@ model User {
     blockedBy BlockList[] @relation("blocked_by")
     messages_sent Chat[] @relation("sender")
     messages_received Chat[] @relation("recipient")
-    location_lat Float?
-    location_lng Float?
     is_terms_accepted  Boolean  @default(false)
     terms_accepted_at  DateTime?
     createdAt DateTime  @default(now())

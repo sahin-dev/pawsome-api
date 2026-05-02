@@ -5,6 +5,9 @@ model Booking {
     sitterId    Int?
     startedAt  DateTime
     endedAt   DateTime
+    address    String
+    sitter_lat      Float?
+    sitter_lng      Float?
     status     BookingStatus @default(Pending)
     service   Service @relation(fields: [serviceId], references: [id])
     pet       Pet @relation(fields: [petId], references: [id])

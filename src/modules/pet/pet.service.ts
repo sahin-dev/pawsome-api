@@ -43,6 +43,10 @@ export class PetService {
                 where: {
                     id: petId,
                     ownerId: ownerId
+
+                },
+                include:{
+                    gallery:true
                 }
             });
 

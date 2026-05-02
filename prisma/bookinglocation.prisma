@@ -1,0 +1,14 @@
+// model LiveLocation{
+//     id   Int  @id  @default(autoincrement())
+//     booking_id  Int
+//     sitter_id   Int
+//     user_id     Int
+//     sitter_currrent_lat Float
+//     sitter_current_lng  Float
+
+//     createdAt  DateTime @default(now())
+//     updatedAt  DateTime @updatedAt
+
+//     @@map("live_location")
+//     @@index([booking_id, sitter_id])
+// }

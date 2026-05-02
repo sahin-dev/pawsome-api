@@ -2,6 +2,7 @@
 model Pet {
     id  Int @id @default(autoincrement())
     name String
+    avatar  String?
     type  PetType
     breed String
     age Float
@@ -11,7 +12,6 @@ model Pet {
     feeding_instructions  String?
     behaviour_notes  String?
     special_instructions  String?
-    images   String[]
     ownerId  Int
     owner  User  @relation(fields:[ownerId], references:[id],onDelete: Cascade)
     bookings  Booking[]

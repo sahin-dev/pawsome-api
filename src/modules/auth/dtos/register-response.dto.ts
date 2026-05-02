@@ -16,6 +16,9 @@ export class RegisterResponseDto {
     role:UserRole
     
     @Expose()
+    phone:string
+    
+    @Expose()
     createdAt:Date
 
     @Expose()

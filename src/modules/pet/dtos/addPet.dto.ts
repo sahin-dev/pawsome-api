@@ -8,6 +8,10 @@ export class AddPetDto {
     @IsString()
     name: string
 
+    @IsNotEmpty()
+    @IsOptional()
+    avatar:string
+
     @IsEnum(PetType)
     @IsNotEmpty()
     type: PetType

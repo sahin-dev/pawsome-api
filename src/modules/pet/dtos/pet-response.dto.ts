@@ -1,10 +1,14 @@
-import { Expose } from "class-transformer"
+import { Expose, Type } from "class-transformer"
 import { PetType } from "generated/prisma/enums"
+import { GalleryResponseDto } from "./gallery-response.dto"
 
 export class PetResponseDto {
     
     @Expose()
     id: number
+
+    @Expose()
+    avatar:string
 
     @Expose()
     name: string
@@ -20,6 +24,9 @@ export class PetResponseDto {
 
     @Expose()
     size: number
+    @Expose()
+    @Type(() => GalleryResponseDto)
+    gallery:GalleryResponseDto
 
     @Expose()
     medical_notes?: string

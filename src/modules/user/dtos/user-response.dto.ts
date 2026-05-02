@@ -6,10 +6,19 @@ export class UserResponseDto {
   id: number;
 
   @Expose()
-  fullName: string;
+  avatar:string
+
+  @Expose()
+  first_name: string;
+  
+  @Expose()
+  last_name:string
 
   @Expose()
   email: string;
+
+  @Expose()
+  phone:string
 
   @Expose()
   role: UserRole;
@@ -19,15 +28,6 @@ export class UserResponseDto {
 
   @Expose()
   is_blocked: boolean;
-
-  @Expose()
-  emergency_contact?: string;
-
-  @Expose()
-  location_lat?: number;
-
-  @Expose()
-  location_lng?: number;
 
   @Expose()
   createdAt: Date;

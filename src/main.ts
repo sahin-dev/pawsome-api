@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConsoleLogger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { ResponseTransformerInterceptor } from './common/interceptors/responseTransformer.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -28,6 +29,10 @@ async function bootstrap() {
   //   },
     
   }))
+
+const reflector = app.get(Reflector)
+
+  app.useGlobalInterceptors(new ResponseTransformerInterceptor(reflector))
 
   await app.listen(process.env.PORT ?? 3000);
 }

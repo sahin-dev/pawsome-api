@@ -1,22 +1,46 @@
 config:
   target: "http://localhost:3007"
   variables:
-    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiZW1haWwiOiJhYmMxMEBlbWFpbC5jb20iLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc3NzQ1NDk5MiwiZXhwIjoxODA4OTkwOTkyfQ.G59ZMatRjuE7ydUh8XloYGMfRTcuhG7NGDAA2C13me4"
+    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhYmMxMEBnbWFpbC5jb20iLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc3NzUxOTQ2NSwiZXhwIjoxODA5MDU1NDY1fQ.tvsiq-n75ehhLoa6SfiRSsBSF94-eFS3SsPt-XNjKY4"
   phases:
     - duration: 60
-      arrivalRate: 10
-      rampTo: 20
-      name: "warm up"
-    - duration: 60
-      arrivalRate: 10
-      rampTo: 50
-      name: Ramp up to peak load
-    - duration: 300
       arrivalRate: 50
-      name: Sustained peak load
+      rampTo: 200
+      name: "Warm up"
+
+    - duration: 120
+      arrivalRate: 200
+      rampTo: 1000
+      name: "Heavy ramp"
+
+    - duration: 300
+      arrivalRate: 1000
+      name: "Sustained extreme load"
+
+    - duration: 120
+      arrivalRate: 1000
+      rampTo: 2000
+      name: "Break the system"
+
+  http:
+    timeout: 5
+
 scenarios:
   - name: "get pets"
     flow:
+      - post:
+          url: "/pets"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            name: "Bou Bou"
+            type: "Dog"
+            weight: 8
+            age: 1
+            breed: "wolf"
+            size: 33
+      - think: 2
+          
       - get:
           url: "/pets"
           headers:

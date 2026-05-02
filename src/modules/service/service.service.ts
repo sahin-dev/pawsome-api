@@ -25,6 +25,7 @@ export class ServiceService {
 
       return service;
     } catch (error) {
+      console.log(error)
       throw new BadRequestException('Failed to create service. Please check your input.');
     }
   }

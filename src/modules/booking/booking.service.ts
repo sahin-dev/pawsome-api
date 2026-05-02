@@ -10,7 +10,7 @@ import { CreateBookingDto } from './dtos/createBooking.dto';
 import { AssignSitterDto } from './dtos/assign-sitter.dto';
 import { UploadToBookingDto } from './dtos/upload-to-booking.dto';
 import { Booking, BookingUploads } from 'generated/prisma/browser';
-import { BookingStatus } from 'generated/prisma/enums';
+import { BookingStatus, DurationUnit, ServiceStatus } from 'generated/prisma/enums';
 import { PaginatedResponseDto } from 'src/common/dtos/paginated-response.dto';
 import { buildPaginationMeta } from 'src/common/utils/paginate.util';
 
@@ -32,6 +32,7 @@ export class BookingService {
           id: createBookingDto.petId,
           ownerId: userId,
         },
+        
       });
 
       if (!pet) {
@@ -42,16 +43,23 @@ export class BookingService {
 
       // Verify service exists
       const service = await this.prismaService.service.findUnique({
-        where: { id: createBookingDto.serviceId },
+        where: { id: createBookingDto.serviceId , status:ServiceStatus.ACTIVE},
       });
 
       if (!service) {
         throw new NotFoundException('Service does not exist.');
       }
+      let duration = 0;
+
+      if(service.durationUnit === DurationUnit.hr){
+        duration = service.duration * 60 * 60 * 1000
+      }else if(service.durationUnit === DurationUnit.day){
+        duration = service.duration * 24 * 60 * 60 * 1000
+      }
 
       // Validate dates
       const startDate = new Date(createBookingDto.startedAt);
-      const endDate = new Date(createBookingDto.endedAt);
+      const endDate = new Date(startDate.getTime() + duration);
 
       if (startDate >= endDate) {
         throw new BadRequestException('Start date must be before end date.');
@@ -68,7 +76,9 @@ export class BookingService {
           startedAt: startDate,
           endedAt: endDate,
           status: BookingStatus.Pending,
+          address: createBookingDto.address
         },
+        include:{service:true, pet:true}
       });
 
       // Invalidate booking caches

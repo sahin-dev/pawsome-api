@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
 import { plainToClass } from "class-transformer";
 import { AuthService } from "./auth.service";
 import { RegisterUserDto } from "./dtos/register-user.dto";
@@ -23,6 +23,7 @@ export class AuthController {
 
     @Post("login")
     @Public()
+    @HttpCode(HttpStatus.OK)
     async login(@Body() loginUserDto: LoginUserDto) {
         const result = await this.authService.login(loginUserDto);
         return plainToClass(LoginResponseDto, result, { excludeExtraneousValues: true });
@@ -30,18 +31,21 @@ export class AuthController {
 
     @Post("forgot-password")
     @Public()
+    @HttpCode(HttpStatus.OK)
     async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
         return await this.authService.forgotPassword(forgotPasswordDto);
     }
 
     @Post("verify-otp")
     @Public()
+    @HttpCode(HttpStatus.OK)
     async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
         return await this.authService.verifyOtp(verifyOtpDto);
     }
 
     @Post("reset-password")
     @Public()
+    @HttpCode(HttpStatus.OK)
     async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
         return await this.authService.resetPassword(resetPasswordDto);
     }

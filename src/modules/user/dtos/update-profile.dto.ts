@@ -6,7 +6,19 @@ export class UpdateProfileDto {
   @IsOptional()
   @MinLength(3)
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  fullName?: string;
+  first_name?: string;
+
+  @IsString()
+  @IsOptional()
+  @MinLength(3)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  last_name?: string;
+
+  @IsString()
+  @IsOptional()
+  @MinLength(3)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  avatar?: string;
 
   @IsString()
   @IsOptional()

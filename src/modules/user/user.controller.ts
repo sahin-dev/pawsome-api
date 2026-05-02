@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, Query, Request, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put, Query, Request, UseGuards } from "@nestjs/common";
 import { plainToClass } from "class-transformer";
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dtos/create-user.dto";
@@ -38,6 +38,7 @@ export class UserController {
     }
 
     @Post("change-password")
+    @HttpCode(HttpStatus.OK)
     async changePassword(@Body() changePasswordDto: ChangePasswordDto, @Request() request: Request) {
         const payload = request['payload'] as TokenPayload;
         return await this.userService.changePassword(payload.id, changePasswordDto);

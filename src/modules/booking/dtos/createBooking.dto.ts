@@ -3,6 +3,7 @@ import {
   IsNumber,
   IsISO8601,
   Min,
+  IsString,
 } from 'class-validator';
 
 export class CreateBookingDto {
@@ -20,7 +21,7 @@ export class CreateBookingDto {
   @IsNotEmpty()
   startedAt: string;
 
-  @IsISO8601()
   @IsNotEmpty()
-  endedAt: string;
+  @IsString()
+  address:string
 }
